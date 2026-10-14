@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#080b12"><title>HQ BÁ KHÍ — LIVE CONTROL</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="grid-bg"></div>
+<header class="topbar">
+  <a class="brand" href="#"><span class="brand-mark">HQ</span><span><b>HQ BÁ KHÍ</b><small>LIVE CONTROL SYSTEM <i>V2.0</i></small></span></a>
+  <div class="top-meta"><span class="status-dot"></span><span id="connectionLabel">CHƯA KẾT NỐI API</span><button id="logoutBtn" class="ghost hidden">THOÁT</button></div>
+</header>
+<main class="shell">
+  <section id="gate" class="gate panel">
+    <div class="eyebrow">ACCESS CONTROL / 01</div>
+    <h1>ENTER YOUR<br><em>ACCESS KEY</em></h1>
+    <p>Nhập KEY hợp lệ để mở bảng điều khiển LIVE.</p>
+    <form id="keyForm">
+      <label for="keyInput">LICENSE KEY</label>
+      <input id="keyInput" autocomplete="off" spellcheck="false" placeholder="HQ-XXXX-XXXX-XXXX" required>
+      <label for="deviceInput">DEVICE ID</label>
+      <div class="device-row"><input id="deviceInput" readonly><button type="button" id="copyDevice" class="ghost">COPY</button></div>
+      <button class="primary" type="submit" id="activateBtn">XÁC THỰC KEY <span>↗</span></button>
+    </form>
+    <div id="gateMessage" class="message">Đang chờ xác thực KEY.</div>
+    <p class="tiny">KEY được kiểm tra ở máy chủ. Không chia sẻ KEY hoặc Device ID công khai.</p>
+  </section>
+
+  <section id="dashboard" class="hidden">
+    <div class="hero-row"><div><div class="eyebrow">LIVE OPERATIONS / 02</div><h1>LIVE <em>RADAR</em></h1><p>Danh sách link LIVE được cung cấp bởi nguồn công khai đã cấu hình.</p></div><div class="live-chip"><span class="pulse"></span> LIVE DIRECTORY</div></div>
+    <section class="metrics">
+      <div class="metric"><small>LINK HIỂN THỊ</small><strong id="linkCount">0</strong><span>từ nguồn dữ liệu</span></div>
+      <div class="metric"><small>RƯƠNG / TÚI</small><strong id="lootCount">—</strong><span id="lootHint">Nguồn chưa cung cấp số liệu</span></div>
+      <div class="metric"><small>CẬP NHẬT LÚC</small><strong id="updatedAt">—</strong><span id="refreshState">Chưa tải dữ liệu</span></div>
+    </section>
+    <section class="toolbar panel">
+      <div class="search-wrap"><label for="searchInput">TÌM LIVE</label><input id="searchInput" placeholder="Tên LIVE hoặc URL..."></div>
+      <div class="filter-wrap"><label for="sourceSelect">NGUỒN</label><select id="sourceSelect"><option value="all">Tất cả</option><option value="configured">Nguồn đã cấu hình</option></select></div>
+      <button id="refreshBtn" class="secondary">↻ LÀM MỚI</button>
+    </section>
+    <div class="section-head"><h2>LIVE DIRECTORY <span id="visibleCount">0</span></h2><span>RƯƠNG/TÚI chỉ hiển thị khi nguồn có dữ liệu thật</span></div>
+    <section id="liveList" class="live-list"><div class="empty panel">Chưa có nguồn LIVE được cấu hình. Hãy thêm link công khai trong <code>live-links.json</code>.</div></section>
+    <section class="notice"><b>GHI CHÚ NGUỒN DỮ LIỆU</b><p>Trang này không tự quét toàn bộ TikTok. Danh sách lấy từ <code>live-links.json</code> hoặc API do bạn cấu hình. Chỉ số rương/túi và số liệu cập nhật theo giây cần được nguồn dữ liệu cung cấp; nếu không có, hệ thống sẽ hiện “Chưa có dữ liệu”, không tạo số giả.</p></section>
+  </section>
+</main>
+<footer><span>HQ BÁ KHÍ <b>●</b> LIVE CONTROL</span><span>NEON INTERFACE / KEY-GATED</span></footer>
+<script src="app.js"></script>
+</body></html>
