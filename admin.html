@@ -1,280 +1,135 @@
 
-const ADMIN = {
-  API_BASE_URL: "https://hq-ba-khi-api.hikhikhakhamunly.workers.dev"
-};
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HQ BÁ KHÍ — Quản trị</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="index.html">
+      HQ <b>BÁ KHÍ</b>
+      <small>TRANG QUẢN TRỊ</small>
+    </a>
+    <span id="apiStatus">ĐANG CHỜ KẾT NỐI API</span>
+  </header>
 
-const $ = id => document.getElementById(id);
-let token = sessionStorage.getItem("hq_admin_token") || "";
-let keys = [];
+  <main>
+    <section id="login" class="panel login">
+      <p class="eyebrow">KHU VỰC QUẢN TRỊ</p>
+      <h1>ĐĂNG NHẬP <em>ADMIN</em></h1>
 
-async function api(path, body = {}) {
-  const response = await fetch(
-    ADMIN.API_BASE_URL.replace(/\/$/, "") + path,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: "Bearer " + token } : {})
-      },
-      body: JSON.stringify(body)
-    }
-  );
+      <form id="loginForm">
+        <label for="password">MẬT KHẨU QUẢN TRỊ</label>
+        <input id="password" type="password"
+          required placeholder="Nhập mật khẩu admin">
+        <button class="primary" type="submit">ĐĂNG NHẬP</button>
+      </form>
 
-  const data = await response.json().catch(() => ({}));
+      <p id="msg">Nhập mật khẩu để truy cập trang quản trị.</p>
+    </section>
 
-  if (!response.ok || !data.ok) {
-    throw new Error(data.error || "Không thể kết nối máy chủ.");
-  }
+    <section id="dash" class="hidden">
+      <div class="heading">
+        <div>
+          <p class="eyebrow">BẢNG ĐIỀU KHIỂN</p>
+          <h1>QUẢN LÝ <em>KEY</em></h1>
+        </div>
+        <button id="logout" class="ghost" type="button">
+          ĐĂNG XUẤT
+        </button>
+      </div>
 
-  return data;
-}
+      <div class="stats">
+        <div class="panel">
+          <small>TỔNG SỐ KEY</small>
+          <strong id="total">0</strong>
+        </div>
+        <div class="panel">
+          <small>ĐANG HOẠT ĐỘNG</small>
+          <strong id="active">0</strong>
+        </div>
+        <div class="panel">
+          <small>ĐÃ KHÓA / HẾT HẠN</small>
+          <strong id="inactive">0</strong>
+        </div>
+      </div>
 
-function say(message) {
-  $("msg").textContent = message;
-}
+      <div class="columns">
+        <section class="panel">
+          <h2>TẠO KEY MỚI</h2>
 
-function getState(key) {
-  if (key.status !== "active") return key.status || "unknown";
+          <label for="label">GHI CHÚ</label>
+          <input id="label" placeholder="Tên người dùng hoặc thiết bị">
 
-  if (key.expiresAt && Date.parse(key.expiresAt) < Date.now()) {
-    return "expired";
-  }
+          <label for="days">THỜI HẠN SỬ DỤNG</label>
+          <select id="days">
+            <option value="0">Không hết hạn</option>
+            <option value="1">1 ngày</option>
+            <option value="7">7 ngày</option>
+            <option value="30" selected>30 ngày</option>
+            <option value="90">90 ngày</option>
+            <option value="365">365 ngày</option>
+          </select>
 
-  return "active";
-}
+          <label for="count">SỐ LƯỢNG KEY</label>
+          <select id="count">
+            <option value="1">1 key</option>
+            <option value="5">5 key</option>
+            <option value="10">10 key</option>
+          </select>
 
-const stateNames = {
-  active: "ĐANG HOẠT ĐỘNG",
-  disabled: "ĐÃ KHÓA",
-  revoked: "ĐÃ THU HỒI",
-  expired: "ĐÃ HẾT HẠN",
-  unknown: "KHÔNG XÁC ĐỊNH"
-};
+          <button id="create" class="primary" type="button">
+            + TẠO KEY
+          </button>
 
-function cell(row, value) {
-  const td = document.createElement("td");
-  td.textContent = value;
-  row.appendChild(td);
-  return td;
-}
+          <pre id="created" class="hidden"></pre>
+        </section>
 
-function render() {
-  const query = $("search").value.trim().toLowerCase();
-  const filter = $("filter").value;
+        <section class="panel">
+          <h2>TÌM KIẾM VÀ LỌC</h2>
 
-  const shown = keys.filter(key => {
-    const state = getState(key);
-    const matchesText = !query ||
-      `${key.key || ""} ${key.label || ""}`.toLowerCase().includes(query);
+          <label for="search">TÌM KEY</label>
+          <input id="search" placeholder="Nhập key hoặc ghi chú">
 
-    return matchesText && (filter === "all" || state === filter);
-  });
+          <label for="filter">TRẠNG THÁI</label>
+          <select id="filter">
+            <option value="all">Tất cả trạng thái</option>
+            <option value="active">Đang hoạt động</option>
+            <option value="disabled">Đã khóa</option>
+            <option value="revoked">Đã thu hồi</option>
+            <option value="expired">Đã hết hạn</option>
+          </select>
 
-  $("total").textContent = keys.length;
-  $("active").textContent =
-    keys.filter(key => getState(key) === "active").length;
-  $("inactive").textContent =
-    keys.filter(key => getState(key) !== "active").length;
+          <button id="refresh" class="ghost" type="button">
+            LÀM MỚI DANH SÁCH
+          </button>
+        </section>
+      </div>
 
-  const root = $("rows");
-  root.replaceChildren();
+      <section class="panel table-wrap">
+        <h2>DANH SÁCH KEY</h2>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>MÃ KEY</th>
+                <th>GHI CHÚ</th>
+                <th>TRẠNG THÁI</th>
+                <th>HẠN SỬ DỤNG</th>
+                <th>THIẾT BỊ</th>
+                <th>THAO TÁC</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
 
-  if (shown.length === 0) {
-    const row = document.createElement("tr");
-    const td = cell(row, "Chưa có key phù hợp.");
-    td.colSpan = 6;
-    root.appendChild(row);
-    return;
-  }
-
-  for (const key of shown) {
-    const row = document.createElement("tr");
-    const state = getState(key);
-
-    const keyCell = cell(row, key.key || "Không có dữ liệu");
-    const code = document.createElement("code");
-    code.textContent = key.key || "";
-    keyCell.replaceChildren(code);
-
-    cell(row, key.label || "—");
-
-    const stateCell = cell(row, stateNames[state] || state);
-    stateCell.className = "state " + state;
-
-    cell(
-      row,
-      key.expiresAt
-        ? new Date(key.expiresAt).toLocaleString("vi-VN")
-        : "Không hết hạn"
-    );
-
-    cell(row, key.deviceId || "Chưa kích hoạt");
-
-    const actions = cell(row, "");
-    const wrap = document.createElement("div");
-    wrap.className = "actions";
-
-    if (state === "active" || state === "disabled") {
-      const button = document.createElement("button");
-      button.className = "ghost";
-      button.textContent = state === "disabled" ? "MỞ KHÓA" : "KHÓA";
-
-      button.onclick = async () => {
-        button.disabled = true;
-
-        try {
-          await api("/api/admin/status", {
-            key: key.key,
-            status: state === "disabled" ? "active" : "disabled"
-          });
-          await loadKeys();
-        } catch (error) {
-          alert("Không thể cập nhật key: " + error.message);
-          button.disabled = false;
-        }
-      };
-
-      wrap.appendChild(button);
-
-      const revoke = document.createElement("button");
-      revoke.className = "ghost";
-      revoke.textContent = "THU HỒI";
-
-      revoke.onclick = async () => {
-        if (!confirm("Bạn chắc chắn muốn thu hồi key này?")) return;
-
-        revoke.disabled = true;
-
-        try {
-          await api("/api/admin/status", {
-            key: key.key,
-            status: "revoked"
-          });
-          await loadKeys();
-        } catch (error) {
-          alert("Không thể thu hồi key: " + error.message);
-          revoke.disabled = false;
-        }
-      };
-
-      wrap.appendChild(revoke);
-    } else {
-      wrap.textContent = "Không có thao tác";
-    }
-
-    root.appendChild(row);
-  }
-}
-
-async function loadKeys() {
-  $("apiStatus").textContent = "ĐANG KẾT NỐI API...";
-  const data = await api("/api/admin/list");
-  keys = Array.isArray(data.keys) ? data.keys : [];
-  $("apiStatus").textContent = "API ĐÃ KẾT NỐI";
-  render();
-}
-
-function showDashboard() {
-  $("login").classList.add("hidden");
-  $("dash").classList.remove("hidden");
-}
-
-function showLogin() {
-  $("dash").classList.add("hidden");
-  $("login").classList.remove("hidden");
-}
-
-$("loginForm").addEventListener("submit", async event => {
-  event.preventDefault();
-  const button = $("loginForm").querySelector("button");
-  button.disabled = true;
-  say("Đang đăng nhập...");
-
-  try {
-    const data = await api("/api/admin/login", {
-      password: $("password").value
-    });
-
-    token = data.token;
-    sessionStorage.setItem("hq_admin_token", token);
-
-    await loadKeys();
-    showDashboard();
-    say("Đăng nhập thành công!");
-  } catch (error) {
-    token = "";
-    sessionStorage.removeItem("hq_admin_token");
-    $("apiStatus").textContent = "API CHƯA KẾT NỐI";
-    say("Đăng nhập thất bại: " + error.message);
-  } finally {
-    button.disabled = false;
-  }
-});
-
-$("create").addEventListener("click", async () => {
-  const button = $("create");
-  button.disabled = true;
-  $("created").classList.add("hidden");
-
-  try {
-    const data = await api("/api/admin/create", {
-      label: $("label").value.trim(),
-      days: Number($("days").value),
-      count: Number($("count").value)
-    });
-
-    const created = $("created");
-    const list = Array.isArray(data.keys) ? data.keys : [];
-
-    created.textContent = list.map(item =>
-      typeof item === "string" ? item : item.key || JSON.stringify(item)
-    ).join("\n") || "Máy chủ không trả về danh sách key.";
-
-    created.classList.remove("hidden");
-    await loadKeys();
-    say("Đã gửi yêu cầu tạo key.");
-  } catch (error) {
-    say("Tạo key thất bại: " + error.message);
-  } finally {
-    button.disabled = false;
-  }
-});
-
-$("refresh").addEventListener("click", async () => {
-  try {
-    await loadKeys();
-    say("Đã cập nhật danh sách key.");
-  } catch (error) {
-    say("Không thể tải danh sách: " + error.message);
-  }
-});
-
-$("search").addEventListener("input", render);
-$("filter").addEventListener("change", render);
-
-$("logout").addEventListener("click", () => {
-  token = "";
-  keys = [];
-  sessionStorage.removeItem("hq_admin_token");
-  $("password").value = "";
-  $("rows").replaceChildren();
-  $("created").classList.add("hidden");
-  $("apiStatus").textContent = "ĐÃ ĐĂNG XUẤT";
-  showLogin();
-  say("Bạn đã đăng xuất.");
-});
-
-if (token) {
-  loadKeys()
-    .then(() => showDashboard())
-    .catch(error => {
-      token = "";
-      sessionStorage.removeItem("hq_admin_token");
-      showLogin();
-      say("Phiên đăng nhập hết hạn hoặc API lỗi: " + error.message);
-    });
-} else {
-  showLogin();
-  $("apiStatus").textContent = "SẴN SÀNG ĐĂNG NHẬP";
-  say("Nhập mật khẩu quản trị để tiếp tục.");
-}
+  <script src="admin.js"></script>
+</body>
+</html>
