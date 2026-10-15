@@ -1,1 +1,280 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HQ BÁ KHÍ — Admin</title><link rel="stylesheet" href="admin.css"></head><body><header><a class="brand" href="index.html">HQ <b>BÁ KHÍ</b><small>ADMIN CONSOLE</small></a><span id="apiStatus">API CHƯA CẤU HÌNH</span></header><main><section id="login" class="panel login"><p class="eyebrow">RESTRICTED AREA</p><h1>ADMIN <em>CONTROL</em></h1><form id="loginForm"><label>MẬT KHẨU ADMIN</label><input id="password" type="password" required placeholder="Mật khẩu quản trị"><button class="primary">ĐĂNG NHẬP</button></form><p id="msg">Cấu hình API backend để bắt đầu.</p></section><section id="dash" class="hidden"><div class="heading"><div><p class="eyebrow">LICENSE MANAGEMENT</p><h1>QUẢN LÝ <em>KEY</em></h1></div><button id="logout" class="ghost">ĐĂNG XUẤT</button></div><div class="stats"><div class="panel"><small>TỔNG KEY</small><strong id="total">0</strong></div><div class="panel"><small>HOẠT ĐỘNG</small><strong id="active">0</strong></div><div class="panel"><small>KHÓA / HẾT HẠN</small><strong id="inactive">0</strong></div></div><div class="columns"><section class="panel"><h2>TẠO KEY</h2><label>GHI CHÚ</label><input id="label" placeholder="Người dùng / thiết bị"><label>THỜI HẠN</label><select id="days"><option value="0">Không hết hạn</option><option value="1">1 ngày</option><option value="7">7 ngày</option><option value="30" selected>30 ngày</option><option value="90">90 ngày</option><option value="365">365 ngày</option></select><label>SỐ LƯỢNG</label><select id="count"><option>1</option><option>5</option><option>10</option></select><button id="create" class="primary">+ TẠO KEY</button><pre id="created" class="hidden"></pre></section><section class="panel"><h2>LỌC KEY</h2><label>TÌM KIẾM</label><input id="search" placeholder="KEY hoặc ghi chú"><label>TRẠNG THÁI</label><select id="filter"><option value="all">Tất cả</option><option value="active">Hoạt động</option><option value="disabled">Đã khóa</option><option value="revoked">Thu hồi</option><option value="expired">Hết hạn</option></select><button id="refresh" class="ghost">LÀM MỚI</button></section></div><section class="panel table-wrap"><h2>DANH SÁCH KEY</h2><div class="scroll"><table><thead><tr><th>KEY</th><th>GHI CHÚ</th><th>TRẠNG THÁI</th><th>HẠN DÙNG</th><th>DEVICE ID</th><th>THAO TÁC</th></tr></thead><tbody id="rows"></tbody></table></div></section></section></main><script src="admin.js"></script></body></html>
+
+const ADMIN = {
+  API_BASE_URL: "https://hq-ba-khi-api.hikhikhakhamunly.workers.dev"
+};
+
+const $ = id => document.getElementById(id);
+let token = sessionStorage.getItem("hq_admin_token") || "";
+let keys = [];
+
+async function api(path, body = {}) {
+  const response = await fetch(
+    ADMIN.API_BASE_URL.replace(/\/$/, "") + path,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: "Bearer " + token } : {})
+      },
+      body: JSON.stringify(body)
+    }
+  );
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || !data.ok) {
+    throw new Error(data.error || "Không thể kết nối máy chủ.");
+  }
+
+  return data;
+}
+
+function say(message) {
+  $("msg").textContent = message;
+}
+
+function getState(key) {
+  if (key.status !== "active") return key.status || "unknown";
+
+  if (key.expiresAt && Date.parse(key.expiresAt) < Date.now()) {
+    return "expired";
+  }
+
+  return "active";
+}
+
+const stateNames = {
+  active: "ĐANG HOẠT ĐỘNG",
+  disabled: "ĐÃ KHÓA",
+  revoked: "ĐÃ THU HỒI",
+  expired: "ĐÃ HẾT HẠN",
+  unknown: "KHÔNG XÁC ĐỊNH"
+};
+
+function cell(row, value) {
+  const td = document.createElement("td");
+  td.textContent = value;
+  row.appendChild(td);
+  return td;
+}
+
+function render() {
+  const query = $("search").value.trim().toLowerCase();
+  const filter = $("filter").value;
+
+  const shown = keys.filter(key => {
+    const state = getState(key);
+    const matchesText = !query ||
+      `${key.key || ""} ${key.label || ""}`.toLowerCase().includes(query);
+
+    return matchesText && (filter === "all" || state === filter);
+  });
+
+  $("total").textContent = keys.length;
+  $("active").textContent =
+    keys.filter(key => getState(key) === "active").length;
+  $("inactive").textContent =
+    keys.filter(key => getState(key) !== "active").length;
+
+  const root = $("rows");
+  root.replaceChildren();
+
+  if (shown.length === 0) {
+    const row = document.createElement("tr");
+    const td = cell(row, "Chưa có key phù hợp.");
+    td.colSpan = 6;
+    root.appendChild(row);
+    return;
+  }
+
+  for (const key of shown) {
+    const row = document.createElement("tr");
+    const state = getState(key);
+
+    const keyCell = cell(row, key.key || "Không có dữ liệu");
+    const code = document.createElement("code");
+    code.textContent = key.key || "";
+    keyCell.replaceChildren(code);
+
+    cell(row, key.label || "—");
+
+    const stateCell = cell(row, stateNames[state] || state);
+    stateCell.className = "state " + state;
+
+    cell(
+      row,
+      key.expiresAt
+        ? new Date(key.expiresAt).toLocaleString("vi-VN")
+        : "Không hết hạn"
+    );
+
+    cell(row, key.deviceId || "Chưa kích hoạt");
+
+    const actions = cell(row, "");
+    const wrap = document.createElement("div");
+    wrap.className = "actions";
+
+    if (state === "active" || state === "disabled") {
+      const button = document.createElement("button");
+      button.className = "ghost";
+      button.textContent = state === "disabled" ? "MỞ KHÓA" : "KHÓA";
+
+      button.onclick = async () => {
+        button.disabled = true;
+
+        try {
+          await api("/api/admin/status", {
+            key: key.key,
+            status: state === "disabled" ? "active" : "disabled"
+          });
+          await loadKeys();
+        } catch (error) {
+          alert("Không thể cập nhật key: " + error.message);
+          button.disabled = false;
+        }
+      };
+
+      wrap.appendChild(button);
+
+      const revoke = document.createElement("button");
+      revoke.className = "ghost";
+      revoke.textContent = "THU HỒI";
+
+      revoke.onclick = async () => {
+        if (!confirm("Bạn chắc chắn muốn thu hồi key này?")) return;
+
+        revoke.disabled = true;
+
+        try {
+          await api("/api/admin/status", {
+            key: key.key,
+            status: "revoked"
+          });
+          await loadKeys();
+        } catch (error) {
+          alert("Không thể thu hồi key: " + error.message);
+          revoke.disabled = false;
+        }
+      };
+
+      wrap.appendChild(revoke);
+    } else {
+      wrap.textContent = "Không có thao tác";
+    }
+
+    root.appendChild(row);
+  }
+}
+
+async function loadKeys() {
+  $("apiStatus").textContent = "ĐANG KẾT NỐI API...";
+  const data = await api("/api/admin/list");
+  keys = Array.isArray(data.keys) ? data.keys : [];
+  $("apiStatus").textContent = "API ĐÃ KẾT NỐI";
+  render();
+}
+
+function showDashboard() {
+  $("login").classList.add("hidden");
+  $("dash").classList.remove("hidden");
+}
+
+function showLogin() {
+  $("dash").classList.add("hidden");
+  $("login").classList.remove("hidden");
+}
+
+$("loginForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = $("loginForm").querySelector("button");
+  button.disabled = true;
+  say("Đang đăng nhập...");
+
+  try {
+    const data = await api("/api/admin/login", {
+      password: $("password").value
+    });
+
+    token = data.token;
+    sessionStorage.setItem("hq_admin_token", token);
+
+    await loadKeys();
+    showDashboard();
+    say("Đăng nhập thành công!");
+  } catch (error) {
+    token = "";
+    sessionStorage.removeItem("hq_admin_token");
+    $("apiStatus").textContent = "API CHƯA KẾT NỐI";
+    say("Đăng nhập thất bại: " + error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("create").addEventListener("click", async () => {
+  const button = $("create");
+  button.disabled = true;
+  $("created").classList.add("hidden");
+
+  try {
+    const data = await api("/api/admin/create", {
+      label: $("label").value.trim(),
+      days: Number($("days").value),
+      count: Number($("count").value)
+    });
+
+    const created = $("created");
+    const list = Array.isArray(data.keys) ? data.keys : [];
+
+    created.textContent = list.map(item =>
+      typeof item === "string" ? item : item.key || JSON.stringify(item)
+    ).join("\n") || "Máy chủ không trả về danh sách key.";
+
+    created.classList.remove("hidden");
+    await loadKeys();
+    say("Đã gửi yêu cầu tạo key.");
+  } catch (error) {
+    say("Tạo key thất bại: " + error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("refresh").addEventListener("click", async () => {
+  try {
+    await loadKeys();
+    say("Đã cập nhật danh sách key.");
+  } catch (error) {
+    say("Không thể tải danh sách: " + error.message);
+  }
+});
+
+$("search").addEventListener("input", render);
+$("filter").addEventListener("change", render);
+
+$("logout").addEventListener("click", () => {
+  token = "";
+  keys = [];
+  sessionStorage.removeItem("hq_admin_token");
+  $("password").value = "";
+  $("rows").replaceChildren();
+  $("created").classList.add("hidden");
+  $("apiStatus").textContent = "ĐÃ ĐĂNG XUẤT";
+  showLogin();
+  say("Bạn đã đăng xuất.");
+});
+
+if (token) {
+  loadKeys()
+    .then(() => showDashboard())
+    .catch(error => {
+      token = "";
+      sessionStorage.removeItem("hq_admin_token");
+      showLogin();
+      say("Phiên đăng nhập hết hạn hoặc API lỗi: " + error.message);
+    });
+} else {
+  showLogin();
+  $("apiStatus").textContent = "SẴN SÀNG ĐĂNG NHẬP";
+  say("Nhập mật khẩu quản trị để tiếp tục.");
+}
