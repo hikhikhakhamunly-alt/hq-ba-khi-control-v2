@@ -1,1 +1,207 @@
-const ADMIN={API_BASE_URL:"https://YOUR-WORKER.your-subdomain.workers.dev"};const $=id=>document.getElementById(id);let token=sessionStorage.getItem("hq_admin_token")||"",keys=[];async function api(path,body={}){if(ADMIN.API_BASE_URL.includes("YOUR-WORKER"))throw Error("Cấu hình API_BASE_URL trong admin.js trước.");const r=await fetch(ADMIN.API_BASE_URL.replace(/\/$/,"")+path,{method:"POST",headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok||!d.ok)throw Error(d.error||"API error");return d}function state(k){if(k.status!=="active")return k.status;if(k.expiresAt&&Date.parse(k.expiresAt)<Date.now())return"expired";return"active"}function say(s){$("msg").textContent=s}async function load(){const d=await api("/api/admin/list");keys=d.keys||[];$("apiStatus").textContent="API ĐÃ KẾT NỐI";render()}function render(){const q=$("search").value.toLowerCase(),f=$("filter").value,items=keys.filter(k=>(!q||(k.key+" "+(k.label||"")).toLowerCase().includes(q))&&(f==="all"||state(k)===f));$("total").textContent=keys.length;$("active").textContent=keys.filter(k=>state(k)==="active").length;$("inactive").textContent=keys.filter(k=>state(k)!=="active").length;const root=$("rows");root.replaceChildren();for(const k of items){const tr=document.createElement("tr");function cell(v){const td=document.createElement("td");td.textContent=v;tr.append(td);return td}const td=cell("");const code=document.createElement("code");code.textContent=k.key;td.append(code);cell(k.label||"—");const s=cell("");const b=document.createElement("span");b.className="state "+state(k);b.textContent=state(k).toUpperCase();s.append(b);cell(k.expiresAt?new Date(k.expiresAt).toLocaleString("vi-VN"):"Không hết hạn");cell(k.deviceId||"Chưa gắn");const a=cell(""),wrap=document.createElement("div");wrap.className="actions";for(const [txt,status] of [[k.status==="disabled"?"MỞ KHÓA":"KHÓA",k.status==="disabled"?"active":"disabled"],["THU HỒI","revoked"]]){const btn=document.createElement("button");btn.className="ghost";btn.textContent=txt;btn.onclick=async()=>{try{await api("/api/admin/status",{key:k.key,status});await load()}catch(e){alert(e.message)}};wrap.append(btn)}a.append(wrap)}}$("loginForm").onsubmit=async e=>{e.preventDefault();try{const d=await api("/api/admin/login",{password:$("password").value});token=d.token;sessionStorage.setItem("hq_admin_token",token);$("login").classList.add("hidden");$("dash").classList.remove("hidden");await load()}catch(err){say(err.message)}};$("create").onclick=async()=>{try{const d=await api("/api/admin/create",{label:$("label").value,days:+$("days").value,count:+$("count").value});$("created").textContent=d.keys.join("\n");$("created").classList.remove("hidden");await load()}catch(e){alert(e.message)}};$("refresh").onclick=()=>load().catch(e=>alert(e.message));$("search").oninput=render;$("filter").onchange=render;$("logout").onclick=()=>{sessionStorage.removeItem("hq_admin_token");location.reload()};
+/* HQ BÁ KHÍ ADMIN CONTROL V2 */
+
+const CONFIG = {
+  API_BASE_URL: "https://hq-ba-khi-api.hikhikhakhamunly.workers.dev"
+};
+
+const $ = id => document.getElementById(id);
+let adminToken = sessionStorage.getItem("hq_admin_token") || "";
+let keys = [];
+
+async function api(path, payload = {}) {
+  const response = await fetch(
+    CONFIG.API_BASE_URL.replace(/\/$/, "") + path,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(adminToken ? { Authorization: "Bearer " + adminToken } : {})
+      },
+      body: JSON.stringify(payload)
+    }
+  );
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || !data.ok) {
+    if (response.status === 401 && path !== "/api/admin/login") {
+      adminToken = "";
+      sessionStorage.removeItem("hq_admin_token");
+    }
+    throw new Error(data.error || "Lỗi kết nối máy chủ.");
+  }
+
+  return data;
+}
+
+function showMessage(text, error = false) {
+  const el = $("message") || $("adminMessage") || $("statusMessage");
+  if (el) {
+    el.textContent = text;
+    el.style.color = error ? "#ff5c75" : "#38e8a5";
+  } else {
+    alert(text);
+  }
+}
+
+function showPanel(loggedIn) {
+  const login = $("loginPanel") || $("loginForm");
+  const panel = $("adminPanel") || $("dashboard");
+
+  if (login) login.classList.toggle("hidden", loggedIn);
+  if (panel) panel.classList.toggle("hidden", !loggedIn);
+}
+
+async function login(password) {
+  const result = await api("/api/admin/login", { password });
+  adminToken = result.token;
+  sessionStorage.setItem("hq_admin_token", adminToken);
+  showPanel(true);
+  await loadKeys();
+}
+
+const loginForm = $("loginForm");
+if (loginForm) {
+  loginForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    const password =
+      $("adminPassword")?.value ||
+      $("password")?.value ||
+      $("passwordInput")?.value ||
+      "";
+
+    if (!password) {
+      showMessage("Vui lòng nhập mật khẩu admin.", true);
+      return;
+    }
+
+    try {
+      showMessage("Đang đăng nhập...");
+      await login(password);
+      showMessage("Đăng nhập thành công.");
+    } catch (error) {
+      showMessage(error.message, true);
+    }
+  });
+}
+
+const createForm = $("createForm");
+if (createForm) {
+  createForm.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    try {
+      const count = Number($("keyCount")?.value || 1);
+      const days = Number($("keyDays")?.value || 0);
+      const label = $("keyLabel")?.value || "";
+
+      const result = await api("/api/admin/create", {
+        count,
+        days,
+        label
+      });
+
+      showMessage("Đã tạo " + result.keys.length + " KEY.");
+      const output = $("createdKeys") || $("keyOutput");
+
+      if (output) output.textContent = result.keys.join("\n");
+      await loadKeys();
+    } catch (error) {
+      showMessage(error.message, true);
+    }
+  });
+}
+
+async function loadKeys() {
+  const result = await api("/api/admin/list");
+  keys = result.keys || [];
+  renderKeys();
+}
+
+function renderKeys() {
+  const root = $("keysList") || $("keyList") || $("keysTableBody");
+  if (!root) return;
+
+  root.replaceChildren();
+
+  if (!keys.length) {
+    const row = document.createElement("div");
+    row.textContent = "Chưa có KEY nào.";
+    root.append(row);
+    return;
+  }
+
+  for (const key of keys) {
+    const row = document.createElement("div");
+    row.className = "key-row";
+
+    const info = document.createElement("span");
+    info.textContent =
+      key.key + " | " + key.status +
+      " | " + (key.expiresAt || "Không hết hạn") +
+      " | " + (key.deviceId || "Chưa gắn thiết bị");
+
+    const copy = document.createElement("button");
+    copy.textContent = "Sao chép";
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(key.key);
+        showMessage("Đã sao chép KEY.");
+      } catch {
+        showMessage("Không sao chép được KEY.", true);
+      }
+    });
+
+    const toggle = document.createElement("button");
+    toggle.textContent = key.status === "active" ? "Khóa KEY" : "Mở KEY";
+    toggle.addEventListener("click", async () => {
+      try {
+        const status = key.status === "active" ? "disabled" : "active";
+        await api("/api/admin/status", { key: key.key, status });
+        showMessage("Đã cập nhật trạng thái KEY.");
+        await loadKeys();
+      } catch (error) {
+        showMessage(error.message, true);
+      }
+    });
+
+    row.append(info, copy, toggle);
+    root.append(row);
+  }
+}
+
+const refreshButton = $("refreshKeys") || $("reloadKeys");
+if (refreshButton) {
+  refreshButton.addEventListener("click", async () => {
+    try {
+      await loadKeys();
+      showMessage("Đã tải danh sách KEY.");
+    } catch (error) {
+      showMessage(error.message, true);
+    }
+  });
+}
+
+const logoutButton = $("logoutBtn") || $("logoutButton");
+if (logoutButton) {
+  logoutButton.addEventListener("click", () => {
+    adminToken = "";
+    sessionStorage.removeItem("hq_admin_token");
+    showPanel(false);
+    showMessage("Đã đăng xuất.");
+  });
+}
+
+if (adminToken) {
+  api("/api/admin/list")
+    .then(result => {
+      keys = result.keys || [];
+      showPanel(true);
+      renderKeys();
+    })
+    .catch(() => {
+      adminToken = "";
+      sessionStorage.removeItem("hq_admin_token");
+      showPanel(false);
+    });
+}
